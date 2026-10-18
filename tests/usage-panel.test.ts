@@ -28,3 +28,23 @@ test('the band shows context, rate limits and cost in one row', async ($, on) =>
     await ui.unmount()
   }
 })
+
+test('the 끄기 button hides the band and /usage-panel brings it back', async ($, on) => {
+  mock.store(on)
+  mock.clock(on)
+  // Stands for the engine's own empty band when the mod yields
+  on('ui.render', ($, e) => $.ui.resolve(e).Box({ key: 'engine' }))
+  on('session.usage', () => ({
+    value: { startedAt: 0, context: { tokens: 1000, window: 200000, percent: 42 }, rateLimits: [] },
+  }))
+
+  const ui = await $.ui.mount({ plugin: 'usage-panel', surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: '42%' })).toBeDefined()
+
+  await ui.press({ key: 'hide' })
+  expect(await ui.find({ type: 'Text', text: '42%' })).toBeUndefined()
+
+  await $.command.run({ command: 'usage-panel', args: '' })
+  expect(await ui.find({ type: 'Text', text: '42%' })).toBeDefined()
+  await ui.unmount()
+})
