@@ -1,0 +1,7 @@
+{
+  "name": "usage-panel",
+  "owner": { "name": "이도현" },
+  "plugins": [
+    { "name": "usage-panel", "source": "./" }
+  ]
+}
