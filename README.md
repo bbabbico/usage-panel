@@ -7,7 +7,7 @@ Claude Code v2.1.302에서 테스트했습니다.
 ## 설치
 
 ```
-claude plugin marketplace add <GitHub계정>/usage-panel
+claude plugin marketplace add bbabbico/usage-panel
 claude plugin install usage-panel@usage-panel
 ```
 
