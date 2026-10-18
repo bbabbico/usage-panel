@@ -73,3 +73,26 @@ test('the band shows the effort the last main-loop request asked for', async ($,
   expect(await ui.find({ type: 'Text', text: 'Opus 5.5 · high' })).toBeDefined()
   await ui.unmount()
 })
+
+test('effort shows from settings at start and follows /effort, saved or not', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on)
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('settings.read', () => ({ value: { modelSettings: { 'claude-opus-5-5': { effortLevel: 'xhigh' } } } }))
+  on('session.usage', () => ({
+    value: { startedAt: 0, context: { tokens: 1000, window: 200000, percent: 1 }, rateLimits: [] },
+  }))
+  // Stands for the built-in /effort: a session-only change, settings untouched
+  on('command.run', { command: 'effort' }, () => ({
+    text: 'Set effort level to max (this session only): Maximum reasoning',
+  }))
+
+  const ui = await $.ui.mount({ plugin: 'usage-panel', surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: 'Opus 5.5 · xhigh' })).toBeDefined()
+
+  await $.command.run({ command: 'effort', args: 'max' })
+  // A command is no act on the drawing: let the redraw it asked for land
+  await clock.settle()
+  expect(await ui.find({ type: 'Text', text: 'Opus 5.5 · max' })).toBeDefined()
+  await ui.unmount()
+})

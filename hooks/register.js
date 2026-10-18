@@ -24,14 +24,27 @@ function untilReset(iso, now) {
 
 // Whether the person turned the band off; kept in $.store across sessions
 let isHidden = false
-// The effort the last main-loop request went out with; kept in $.store too
+// The session's effort: from settings on the first draw, from /effort and /model,
+// and from each main-loop request, which is what the model actually got
 let effort = null
+let isEffortRead = false
 
 // "claude-opus-5-5" -> "Opus 5.5", anything else as given
 function modelName(id) {
   const m = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?!\d)/.exec(id)
   if (!m) return id
   return m[1][0].toUpperCase() + m[1].slice(1) + ' ' + m[2] + (m[3] ? '.' + m[3] : '')
+}
+
+// The saved default for the session's model, as /effort and /model leave it
+async function effortFromSettings($) {
+  try {
+    const model = await $.session.model()
+    const s = await $.settings.read()
+    return s.modelSettings?.[model]?.effortLevel ?? s.effortLevel ?? null
+  } catch {
+    return null
+  }
 }
 
 async function setHidden($, value) {
@@ -44,7 +57,6 @@ export function register(on) {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'usage-panel', description: '사용량 줄 켜기/끄기' })
     isHidden = (await $.store.get('hidden')) === true
-    effort = (await $.store.get('effort')) ?? null
     // Keep the reset countdowns current between measurements
     $.clock.every(60000, () => $.ui.invalidate('ui.render'))
     return next(e)
@@ -60,10 +72,26 @@ export function register(on) {
   on('turn.step', async function* ($, e, next) {
     if (!e.agentId && e.effort !== undefined && e.effort !== effort) {
       effort = e.effort
-      await $.store.set('effort', effort)
       $.ui.invalidate('ui.render')
     }
     return yield* next(e)
+  })
+
+  // A session-only /effort is never saved, so read the level off its answer
+  on('command.run', { command: 'effort' }, async ($, e, next) => {
+    const r = await next(e)
+    const m = /effort level to (low|medium|high|xhigh|max)\b/i.exec(r?.text ?? '')
+    effort = m ? m[1].toLowerCase() : await effortFromSettings($)
+    $.ui.invalidate('ui.render')
+    return r
+  })
+
+  // Each model keeps its own saved effort
+  on('command.run', { command: 'model' }, async ($, e, next) => {
+    const r = await next(e)
+    effort = await effortFromSettings($)
+    $.ui.invalidate('ui.render')
+    return r
   })
 
   on('command.run', { command: 'usage-panel' }, async ($) => {
@@ -98,6 +126,10 @@ export function register(on) {
       })
 
     const { context, rateLimits = [], cost } = usage
+    if (!isEffortRead) {
+      isEffortRead = true
+      effort = effort ?? (await effortFromSettings($))
+    }
     const model = modelName(await $.session.model())
     const items = [
       Text({ children: [model + (effort !== null ? ' · ' + effort : '')] }),
