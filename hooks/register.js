@@ -62,6 +62,7 @@ export function register(on) {
     }
     if (cost) items.push(Text({ children: ['$' + cost.usd.toFixed(2)] }))
 
-    return Box({ flexDirection: 'row', columnGap: 3, children: items })
+    // One blank row above, matching the gap Claude Code leaves below the band
+    return Box({ flexDirection: 'row', columnGap: 3, marginTop: 1, children: items })
   })
 }
